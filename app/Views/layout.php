@@ -124,8 +124,7 @@
         <a class="navbar-brand d-flex align-items-center gap-3" href="<?= site_url('/') ?>">
             <span class="brand-mark">MM</span>
             <span>
-                <span class="d-block brand-text">Mobile Money S4</span>
-                <small class="text-muted-soft">Examen final - version 1</small>
+                <span class="d-block brand-text">Mobile Money</span>
             </span>
         </a>
         <div class="ms-auto d-flex gap-2 flex-wrap">
