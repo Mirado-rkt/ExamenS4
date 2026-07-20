@@ -18,3 +18,7 @@ $routes->post('dashboard/transfer', 'Dashboard::transfer');
 $routes->get('operateur', 'Operator::index');
 $routes->post('operateur/prefix', 'Operator::addPrefix');
 $routes->post('operateur/fee', 'Operator::updateFeeBand');
+$routes->post('operateur/commission', 'Operator::setCommission');
+$routes->post('operateur/commission/delete', 'Operator::deleteCommission');
+
+$routes->post('dashboard/transfer-multiple', 'Dashboard::transferMultiple');
