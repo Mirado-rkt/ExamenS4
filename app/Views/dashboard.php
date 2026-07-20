@@ -88,7 +88,32 @@
                         <label class="form-label">Montant</label>
                         <input type="number" min="1" step="1" name="amount" class="form-control form-control-lg" value="<?= esc(old('amount')) ?>" placeholder="15000" required>
                     </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" name="include_withdrawal_fees" class="form-check-input" id="include_withdrawal_fees" value="1">
+                        <label class="form-check-label" for="include_withdrawal_fees">Inclure les frais de retrait dans l'envoi (si destinataire chez nous)</label>
+                    </div>
                     <button class="btn btn-mm w-100">Envoyer</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card surface border-0 text-white h-100">
+            <div class="card-body p-4">
+                <h2 class="h4 mb-3">Transfert multiple (mêmes opérateurs seulement)</h2>
+                <form method="post" action="<?= site_url('dashboard/transfer-multiple') ?>">
+                    <div class="mb-3">
+                        <label class="form-label">Numéros destinataires (séparés par virgule ou nouvelle ligne)</label>
+                        <textarea name="recipient_phones" class="form-control" rows="3" placeholder="0371234567, 0372345678" required><?= esc(old('recipient_phones')) ?></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Montant total à répartir</label>
+                        <input type="number" min="1" step="1" name="total_amount" class="form-control" value="<?= esc(old('total_amount')) ?>" placeholder="30000" required>
+                    </div>
+                    <button class="btn btn-mm">Envoyer en plusieurs</button>
                 </form>
             </div>
         </div>
@@ -109,12 +134,13 @@
                                 <th>Type</th>
                                 <th>Montant</th>
                                 <th>Frais</th>
+                                <th>Commission</th>
                                 <th>Solde du compte</th>
                             </tr>
                         </thead>
                         <tbody>
                         <?php if (empty($history)) : ?>
-                            <tr><td colspan="6" class="text-muted-soft py-4">Aucune opération enregistrée.</td></tr>
+                            <tr><td colspan="7" class="text-muted-soft py-4">Aucune opération enregistrée.</td></tr>
                         <?php else : ?>
                             <?php foreach ($history as $row) : ?>
                                 <tr>
@@ -128,6 +154,7 @@
                                     </td>
                                     <td><?= number_format((float) $row['montant'], 0, ',', ' ') ?> Ar</td>
                                     <td><?= number_format((float) $row['frais'], 0, ',', ' ') ?> Ar</td>
+                                    <td><?= number_format((float) ($row['commission'] ?? 0.0), 0, ',', ' ') ?> Ar</td>
                                     <td><?= number_format((float) $row['solde_compte'], 0, ',', ' ') ?> Ar</td>
                                 </tr>
                             <?php endforeach; ?>

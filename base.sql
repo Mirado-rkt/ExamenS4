@@ -16,6 +16,7 @@ CREATE TABLE operateurs (
     id     INTEGER PRIMARY KEY AUTOINCREMENT,
     code   VARCHAR(20) NOT NULL UNIQUE,   -- ORANGE, AIRTEL, YAS
     nom    VARCHAR(50) NOT NULL           -- Orange Money, Airtel Money, Yas (MVola)
+    ,est_principal INTEGER NOT NULL DEFAULT 0 -- 1 = opérateur principal (nous)
 );
 
 -- Préfixes valables, rattachés à un opérateur (ex: 032/037 = Orange)
@@ -115,10 +116,10 @@ SELECT * FROM vue_situation_comptes;
 -- =========================================================
 
 -- Opérateurs
-INSERT INTO operateurs (code, nom) VALUES
-    ('ORANGE', 'Orange Money'),
-    ('AIRTEL', 'Airtel Money'),
-    ('YAS',    'Yas (ex-MVola/Telma)');
+INSERT INTO operateurs (code, nom, est_principal) VALUES
+    ('ORANGE', 'Orange Money', 1),
+    ('AIRTEL', 'Airtel Money', 0),
+    ('YAS',    'Yas (ex-MVola/Telma)', 0);
 
 -- Préfixes valables par opérateur
 -- Orange  : 032, 037
@@ -162,3 +163,62 @@ INSERT INTO clients (operateur_id, telephone, solde) VALUES
     (2, '0354567890', 45000),
     (3, '0345678901', 300000),
     (3, '0386789012', 60000);
+
+-- =========================================================
+-- Table: commissions_inter_operateurs
+-- Pourcentage de commission additionnelle perçue par l'opérateur principal
+-- lorsqu'un client du principal transfère vers un client d'un autre opérateur
+-- =========================================================
+CREATE TABLE commissions_inter_operateurs (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    operateur_id INTEGER NOT NULL, -- autre opérateur (à qui on envoie)
+    pourcentage  DECIMAL(5,2) NOT NULL DEFAULT 0,
+    pourcentage_supplementaire DECIMAL(5,2) NOT NULL DEFAULT 0,
+    FOREIGN KEY (operateur_id) REFERENCES operateurs(id)
+);
+
+-- Par défaut, pas de commission (0) pour les opérateurs tiers
+INSERT INTO commissions_inter_operateurs (operateur_id, pourcentage, pourcentage_supplementaire) VALUES
+    (1, 0.00, 0.00),
+    (2, 0.00, 0.00),
+    (3, 0.00, 0.00);
+
+-- =========================================================
+-- VUES ADDITIONNELLES V2
+-- =========================================================
+
+-- Commissions réelles perçues par l'opérateur principal sur les transferts
+-- effectués par nos clients vers des clients d'autres opérateurs
+CREATE VIEW vue_commissions_inter_operateurs AS
+SELECT
+    op.code AS operateur_cible,
+    ci.pourcentage AS pourcentage,
+    COUNT(o.id) AS nombre_transferts,
+    SUM(o.montant * ci.pourcentage / 100.0) AS total_commissions
+FROM operations o
+JOIN types_operation t ON t.id = o.type_operation_id AND t.code = 'TRANSFERT'
+JOIN clients c ON c.id = o.client_id -- expéditeur
+JOIN operateurs op_src ON op_src.id = c.operateur_id
+JOIN clients cd ON cd.id = o.client_destinataire_id -- destinataire
+JOIN operateurs op ON op.id = cd.operateur_id -- opérateur destinataire
+JOIN commissions_inter_operateurs ci ON ci.operateur_id = op.id
+WHERE op_src.est_principal = 1 AND op.est_principal = 0
+GROUP BY op.code, ci.pourcentage;
+
+-- Pour chaque opérateur tiers, somme des montants à envoyer (hors commission)
+-- Montant net que l'opérateur principal doit reverser à l'opérateur destinataire
+CREATE VIEW vue_montants_a_envoyer AS
+SELECT
+    op.code AS operateur_cible,
+    COUNT(o.id) AS nombre_transferts,
+    SUM(o.montant - (o.montant * COALESCE(ci.pourcentage,0) / 100.0)) AS montant_net_a_envoyer
+FROM operations o
+JOIN types_operation t ON t.id = o.type_operation_id AND t.code = 'TRANSFERT'
+JOIN clients c ON c.id = o.client_id
+JOIN operateurs op_src ON op_src.id = c.operateur_id
+JOIN clients cd ON cd.id = o.client_destinataire_id
+JOIN operateurs op ON op.id = cd.operateur_id
+LEFT JOIN commissions_inter_operateurs ci ON ci.operateur_id = op.id
+WHERE op_src.est_principal = 1 AND op.est_principal = 0
+GROUP BY op.code;
+

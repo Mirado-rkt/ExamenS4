@@ -85,12 +85,24 @@ class MobileMoneyRepository
                     CASE
                         WHEN o.client_id = :client_id THEN o.solde_apres
                         ELSE c3.solde
-                    END AS solde_compte
+                    END AS solde_compte,
+                    -- Commission inter-opérateurs : applicable quand c1 (expéditeur) est chez le principal
+                    -- et que le destinataire appartient à un opérateur tiers
+                    COALESCE(
+                      CASE
+                        WHEN t.code = "TRANSFERT" AND op_src.est_principal = 1 AND op_dest.est_principal = 0
+                        THEN o.montant * COALESCE(ci.pourcentage, 0) / 100.0
+                        ELSE 0
+                      END, 0
+                    ) AS commission
              FROM operations o
              JOIN types_operation t ON t.id = o.type_operation_id
              JOIN clients c1 ON c1.id = o.client_id
              LEFT JOIN clients c2 ON c2.id = o.client_destinataire_id
              LEFT JOIN clients c3 ON c3.id = :client_id
+             LEFT JOIN operateurs op_src ON op_src.id = c1.operateur_id
+             LEFT JOIN operateurs op_dest ON op_dest.id = c2.operateur_id
+             LEFT JOIN commissions_inter_operateurs ci ON ci.operateur_id = op_dest.id
              WHERE o.client_id = :client_id OR o.client_destinataire_id = :client_id
              ORDER BY o.date_operation DESC, o.id DESC',
             ['client_id' => $clientId]
@@ -193,7 +205,7 @@ class MobileMoneyRepository
         ];
     }
 
-    public function transfer(int $clientId, string $recipientPhone, float $amount): array
+    public function transfer(int $clientId, string $recipientPhone, float $amount, bool $includeWithdrawalFees = false): array
     {
         if ($amount <= 0) {
             throw new RuntimeException('Le montant du transfert doit être supérieur à zéro.');
@@ -208,7 +220,38 @@ class MobileMoneyRepository
 
         $typeId = $this->requireOperationTypeId('TRANSFERT');
         $fee = $this->calculateFee((int) $sender['operateur_id'], 'TRANSFERT', $amount);
-        $totalDebit = $amount + $fee;
+
+        // Determine commission if sender is principal and recipient belongs to other operator
+        $senderIsPrincipal = (int) ($this->fetchOne('SELECT est_principal FROM operateurs WHERE id = :id', ['id' => (int) $sender['operateur_id']])['est_principal']) === 1;
+        $recipientOperateurId = (int) $recipient['operateur_id'];
+        $recipientIsPrincipal = (int) ($this->fetchOne('SELECT est_principal FROM operateurs WHERE id = :id', ['id' => $recipientOperateurId])['est_principal']) === 1;
+
+        $commissionPercentage = 0.0;
+        $commissionSupplement = 0.0;
+        $commissionAmount = 0.0;
+        if ($senderIsPrincipal && !$recipientIsPrincipal) {
+            // Read both base commission and optional supplementary percent
+            $row = $this->fetchOne('SELECT pourcentage, pourcentage_supplementaire FROM commissions_inter_operateurs WHERE operateur_id = :operateur_id', ['operateur_id' => $recipientOperateurId]);
+            if ($row !== null) {
+                $commissionPercentage = (float) ($row['pourcentage'] ?? 0.0);
+                $commissionSupplement = (float) ($row['pourcentage_supplementaire'] ?? 0.0);
+            }
+
+            $totalPercent = $commissionPercentage + $commissionSupplement;
+            $commissionAmount = $amount * $totalPercent / 100.0;
+        }
+
+        // If includeWithdrawalFees requested, only allowed when recipient is at principal
+        $withdrawalFee = 0.0;
+        if ($includeWithdrawalFees) {
+            if (!$recipientIsPrincipal) {
+                throw new RuntimeException('L\'option "Inclure les frais de retrait" n\'est pas disponible pour un destinataire d\'un autre opérateur.');
+            }
+            $withdrawalFee = $this->calculateFee($recipientOperateurId, 'RETRAIT', $amount);
+        }
+
+        // Total debit from sender: amount + transfer fee + optional anticipated withdrawal fee
+        $totalDebit = $amount + $fee + $withdrawalFee;
         $balanceBefore = (float) $sender['solde'];
 
         if ($balanceBefore < $totalDebit) {
@@ -217,7 +260,9 @@ class MobileMoneyRepository
 
         $senderBalanceAfter = $balanceBefore - $totalDebit;
         $recipientBalanceBefore = (float) $recipient['solde'];
-        $recipientBalanceAfter = $recipientBalanceBefore + $amount;
+        // Recipient receives the amount minus commission (if any) and minus anticipated withdrawal fee (if included)
+        $recipientNet = $amount - $commissionAmount - $withdrawalFee;
+        $recipientBalanceAfter = $recipientBalanceBefore + $recipientNet;
 
         $this->db->exec('BEGIN IMMEDIATE TRANSACTION');
 
@@ -240,7 +285,7 @@ class MobileMoneyRepository
                     'client_id' => $clientId,
                     'client_destinataire_id' => (int) $recipient['id'],
                     'montant' => $amount,
-                    'frais' => $fee,
+                    'frais' => $fee + $withdrawalFee,
                     'solde_avant' => $balanceBefore,
                     'solde_apres' => $senderBalanceAfter,
                 ]
@@ -256,8 +301,108 @@ class MobileMoneyRepository
             'balance_before' => $balanceBefore,
             'balance_after' => $senderBalanceAfter,
             'fee' => $fee,
+            'commission' => $commissionAmount,
             'recipient_phone' => $recipient['telephone'],
+            'recipient_net' => $recipientNet,
         ];
+    }
+
+    public function transferMultiple(int $clientId, array $phones, float $totalAmount): array
+    {
+        if (empty($phones)) {
+            throw new RuntimeException('Aucun destinataire fourni pour le transfert multiple.');
+        }
+
+        $sender = $this->requireClient($clientId);
+        $senderIsPrincipal = (int) ($this->fetchOne('SELECT est_principal FROM operateurs WHERE id = :id', ['id' => (int) $sender['operateur_id']])['est_principal']) === 1;
+
+        $count = count($phones);
+        $share = floor($totalAmount / $count);
+        $remainder = $totalAmount - ($share * $count);
+
+        $results = [];
+
+        // All recipients must exist/be created and be at principal operator
+        $recipients = [];
+        foreach ($phones as $phone) {
+            $r = $this->createOrGetClientByPhone($phone);
+            $recipients[] = $r;
+            $op = $this->fetchOne('SELECT est_principal FROM operateurs WHERE id = :id', ['id' => (int) $r['operateur_id']]);
+            if ((int) $op['est_principal'] !== 1) {
+                throw new RuntimeException('Le transfert multiple n\'est autorisé que vers des destinataires chez l\'opérateur principal.');
+            }
+        }
+
+        // Start transaction and perform individual transfers without the withdrawal-included option
+        $this->db->exec('BEGIN IMMEDIATE TRANSACTION');
+
+        try {
+            // Check total available balance including fees per individual
+            $balanceBefore = (float) $sender['solde'];
+            $expectedTotalDebit = 0.0;
+            $individualAmounts = [];
+
+            for ($i = 0; $i < $count; $i++) {
+                $amt = $share + ($i === 0 ? $remainder : 0);
+                $fee = $this->calculateFee((int) $sender['operateur_id'], 'TRANSFERT', $amt);
+                $expectedTotalDebit += $amt + $fee;
+                $individualAmounts[] = ['amount' => $amt, 'fee' => $fee];
+            }
+
+            if ($balanceBefore < $expectedTotalDebit) {
+                throw new RuntimeException('Solde insuffisant pour le transfert multiple.');
+            }
+
+            $senderBalanceAfter = $balanceBefore - $expectedTotalDebit;
+
+            // Update sender balance
+            $this->execute('UPDATE clients SET solde = :solde WHERE id = :id', [
+                'solde' => $senderBalanceAfter,
+                'id' => $clientId,
+            ]);
+
+            // Process each recipient
+            $cumulativeDebit = 0.0;
+            foreach ($recipients as $idx => $recipient) {
+                $amt = $individualAmounts[$idx]['amount'];
+                $fee = $individualAmounts[$idx]['fee'];
+                $recipientBalanceBefore = (float) $recipient['solde'];
+                $recipientBalanceAfter = $recipientBalanceBefore + $amt;
+
+                $this->execute('UPDATE clients SET solde = :solde WHERE id = :id', [
+                    'solde' => $recipientBalanceAfter,
+                    'id' => (int) $recipient['id'],
+                ]);
+
+                $cumulativeDebit += $amt + $fee;
+                $opSoldeAvant = $balanceBefore;
+                $opSoldeApres = $balanceBefore - $cumulativeDebit;
+
+                $this->execute(
+                    'INSERT INTO operations (type_operation_id, client_id, client_destinataire_id, montant, frais, solde_avant, solde_apres)
+                     VALUES (:type_operation_id, :client_id, :client_destinataire_id, :montant, :frais, :solde_avant, :solde_apres)',
+                    [
+                        'type_operation_id' => $this->requireOperationTypeId('TRANSFERT'),
+                        'client_id' => $clientId,
+                        'client_destinataire_id' => (int) $recipient['id'],
+                        'montant' => $amt,
+                        'frais' => $fee,
+                        'solde_avant' => $opSoldeAvant,
+                        'solde_apres' => $opSoldeApres,
+                    ]
+                );
+
+                $results[] = ['recipient_phone' => $recipient['telephone'], 'amount' => $amt, 'fee' => $fee];
+            }
+
+            // Fix solde_apres values for operations if necessary
+            $this->db->exec('COMMIT');
+        } catch (\Throwable $exception) {
+            $this->db->exec('ROLLBACK');
+            throw $exception;
+        }
+
+        return ['balance_before' => $balanceBefore, 'balance_after' => $senderBalanceAfter, 'details' => $results];
     }
 
     public function getOperatorPrefixes(): array
@@ -272,7 +417,54 @@ class MobileMoneyRepository
 
     public function getOperators(): array
     {
-        return $this->fetchAll('SELECT id, code, nom FROM operateurs ORDER BY code');
+        return $this->fetchAll('SELECT id, code, nom, est_principal FROM operateurs ORDER BY code');
+    }
+
+    public function getCommissionsInterOperators(): array
+    {
+        return $this->fetchAll(
+            'SELECT ci.id, ci.operateur_id, ci.pourcentage, ci.pourcentage_supplementaire, op.code AS operateur_code, op.nom AS operateur_nom
+             FROM commissions_inter_operateurs ci
+             JOIN operateurs op ON op.id = ci.operateur_id
+             ORDER BY op.code'
+        );
+    }
+
+    public function setCommissionInterOperateur(int $operateurId, float $pourcentage): void
+    {
+        if ($operateurId <= 0) {
+            throw new RuntimeException('Opérateur invalide.');
+        }
+
+        // Either update existing or insert
+        $exists = $this->fetchOne('SELECT id FROM commissions_inter_operateurs WHERE operateur_id = :operateur_id', ['operateur_id' => $operateurId]);
+        if ($exists === null) {
+            $this->execute('INSERT INTO commissions_inter_operateurs (operateur_id, pourcentage) VALUES (:operateur_id, :pourcentage)', [
+                'operateur_id' => $operateurId,
+                'pourcentage' => $pourcentage,
+            ]);
+        } else {
+            $this->execute('UPDATE commissions_inter_operateurs SET pourcentage = :pourcentage WHERE operateur_id = :operateur_id', [
+                'pourcentage' => $pourcentage,
+                'operateur_id' => $operateurId,
+            ]);
+        }
+    }
+
+    public function deleteCommissionInterOperateur(int $operateurId): void
+    {
+        if ($operateurId <= 0) {
+            throw new RuntimeException('Opérateur invalide.');
+        }
+
+        $this->execute('DELETE FROM commissions_inter_operateurs WHERE operateur_id = :operateur_id', [
+            'operateur_id' => $operateurId,
+        ]);
+    }
+
+    public function getMontantsAEnvoyer(): array
+    {
+        return $this->fetchAll('SELECT operateur_cible, nombre_transferts, montant_net_a_envoyer FROM vue_montants_a_envoyer ORDER BY operateur_cible');
     }
 
     public function getTypesOperation(): array
@@ -345,31 +537,151 @@ class MobileMoneyRepository
 
     private function initializeSchema(): void
     {
-        if ($this->tableExists('operateurs')) {
-            return;
-        }
-
         $schemaFile = ROOTPATH . 'base.sql';
         if (!is_file($schemaFile)) {
             throw new RuntimeException('Le fichier base.sql est introuvable.');
         }
 
-        $sql = file_get_contents($schemaFile);
-        if ($sql === false) {
-            throw new RuntimeException('Impossible de lire base.sql.');
-        }
-
-        $sql = preg_replace('/^\s*--.*$/m', '', $sql) ?? $sql;
-        $statements = preg_split('/;\s*(?:\n|$)/', trim($sql)) ?: [];
-
-        foreach ($statements as $statement) {
-            $statement = trim($statement);
-            if ($statement === '') {
-                continue;
+        // If operateurs table does not exist, initialize from base.sql (fresh DB)
+        if (!$this->tableExists('operateurs')) {
+            $sql = file_get_contents($schemaFile);
+            if ($sql === false) {
+                throw new RuntimeException('Impossible de lire base.sql.');
             }
 
-            if (!$this->db->exec($statement)) {
-                throw new RuntimeException('Erreur SQL: ' . $this->db->lastErrorMsg());
+            $sql = preg_replace('/^\s*--.*$/m', '', $sql) ?? $sql;
+            $statements = preg_split('/;\s*(?:\n|$)/', trim($sql)) ?: [];
+
+            foreach ($statements as $statement) {
+                $statement = trim($statement);
+                if ($statement === '') {
+                    continue;
+                }
+
+                if (!$this->db->exec($statement)) {
+                    throw new RuntimeException('Erreur SQL: ' . $this->db->lastErrorMsg());
+                }
+            }
+
+            return;
+        }
+
+        // If table exists, apply lightweight migrations for V2 if needed
+        // 1) Ensure operateurs.est_principal exists
+        $columns = $this->fetchAll("PRAGMA table_info('operateurs')");
+        $hasEstPrincipal = false;
+        foreach ($columns as $col) {
+            if (isset($col['name']) && $col['name'] === 'est_principal') {
+                $hasEstPrincipal = true;
+                break;
+            }
+        }
+
+        if (!$hasEstPrincipal) {
+            // Add column with default 0 and set ORANGE to 1
+            $this->db->exec('BEGIN IMMEDIATE TRANSACTION');
+            try {
+                if (!$this->db->exec('ALTER TABLE operateurs ADD COLUMN est_principal INTEGER NOT NULL DEFAULT 0')) {
+                    throw new RuntimeException('Impossible d\'ajouter la colonne est_principal: ' . $this->db->lastErrorMsg());
+                }
+                $this->execute("UPDATE operateurs SET est_principal = 1 WHERE code = 'ORANGE'");
+                $this->db->exec('COMMIT');
+            } catch (\Throwable $e) {
+                $this->db->exec('ROLLBACK');
+                throw $e;
+            }
+        }
+
+        // 2) Ensure commissions_inter_operateurs table exists
+        if (!$this->tableExists('commissions_inter_operateurs')) {
+            $this->db->exec('BEGIN IMMEDIATE TRANSACTION');
+            try {
+                $this->db->exec(
+                    'CREATE TABLE IF NOT EXISTS commissions_inter_operateurs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        operateur_id INTEGER NOT NULL,
+                        pourcentage DECIMAL(5,2) NOT NULL DEFAULT 0,
+                        pourcentage_supplementaire DECIMAL(5,2) NOT NULL DEFAULT 0,
+                        FOREIGN KEY (operateur_id) REFERENCES operateurs(id)
+                    )'
+                );
+
+                // Insert defaults for all existing operators (including ORANGE)
+                $ops = $this->fetchAll('SELECT id FROM operateurs');
+                foreach ($ops as $op) {
+                    $this->execute('INSERT OR IGNORE INTO commissions_inter_operateurs (operateur_id, pourcentage, pourcentage_supplementaire) VALUES (:operateur_id, 0.00, 0.00)', ['operateur_id' => $op['id']]);
+                }
+
+                // Create or update V2 views if missing
+                $this->db->exec(
+                    "CREATE VIEW IF NOT EXISTS vue_commissions_inter_operateurs AS
+                    SELECT
+                        op.code AS operateur_cible,
+                        ci.pourcentage AS pourcentage,
+                        COUNT(o.id) AS nombre_transferts,
+                        SUM(o.montant * ci.pourcentage / 100.0) AS total_commissions
+                    FROM operations o
+                    JOIN types_operation t ON t.id = o.type_operation_id AND t.code = 'TRANSFERT'
+                    JOIN clients c ON c.id = o.client_id
+                    JOIN operateurs op_src ON op_src.id = c.operateur_id
+                    JOIN clients cd ON cd.id = o.client_destinataire_id
+                    JOIN operateurs op ON op.id = cd.operateur_id
+                    JOIN commissions_inter_operateurs ci ON ci.operateur_id = op.id
+                    WHERE op_src.est_principal = 1 AND op.est_principal = 0
+                    GROUP BY op.code, ci.pourcentage"
+                );
+
+                $this->db->exec(
+                    "CREATE VIEW IF NOT EXISTS vue_montants_a_envoyer AS
+                    SELECT
+                        op.code AS operateur_cible,
+                        COUNT(o.id) AS nombre_transferts,
+                        SUM(o.montant - (o.montant * COALESCE(ci.pourcentage,0) / 100.0)) AS montant_net_a_envoyer
+                    FROM operations o
+                    JOIN types_operation t ON t.id = o.type_operation_id AND t.code = 'TRANSFERT'
+                    JOIN clients c ON c.id = o.client_id
+                    JOIN operateurs op_src ON op_src.id = c.operateur_id
+                    JOIN clients cd ON cd.id = o.client_destinataire_id
+                    JOIN operateurs op ON op.id = cd.operateur_id
+                    LEFT JOIN commissions_inter_operateurs ci ON ci.operateur_id = op.id
+                    WHERE op_src.est_principal = 1 AND op.est_principal = 0
+                    GROUP BY op.code"
+                );
+
+                $this->db->exec('COMMIT');
+            } catch (\Throwable $e) {
+                $this->db->exec('ROLLBACK');
+                throw $e;
+            }
+        }
+
+        // Ensure every operator has an entry in commissions_inter_operateurs
+        $missing = $this->fetchAll('SELECT id FROM operateurs WHERE id NOT IN (SELECT operateur_id FROM commissions_inter_operateurs)');
+        foreach ($missing as $op) {
+            $this->execute('INSERT OR IGNORE INTO commissions_inter_operateurs (operateur_id, pourcentage, pourcentage_supplementaire) VALUES (:operateur_id, 0.00, 0.00)', ['operateur_id' => $op['id']]);
+        }
+
+        // If existing table lacks the new column, attempt lightweight migration (add column)
+        $cols = $this->fetchAll("PRAGMA table_info('commissions_inter_operateurs')");
+        $hasSupplement = false;
+        foreach ($cols as $c) {
+            if (isset($c['name']) && $c['name'] === 'pourcentage_supplementaire') {
+                $hasSupplement = true;
+                break;
+            }
+        }
+
+        if (!$hasSupplement) {
+            // add column with default 0
+            $this->db->exec('BEGIN IMMEDIATE TRANSACTION');
+            try {
+                if (!$this->db->exec('ALTER TABLE commissions_inter_operateurs ADD COLUMN pourcentage_supplementaire DECIMAL(5,2) NOT NULL DEFAULT 0')) {
+                    throw new RuntimeException('Impossible d\'ajouter la colonne pourcentage_supplementaire: ' . $this->db->lastErrorMsg());
+                }
+                $this->db->exec('COMMIT');
+            } catch (\Throwable $e) {
+                $this->db->exec('ROLLBACK');
+                // Non-fatal: just continue with default behavior
             }
         }
     }

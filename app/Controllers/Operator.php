@@ -23,6 +23,8 @@ class Operator extends BaseController
             'feeBands' => $this->repository->getFeeBands(),
             'gains' => $this->repository->getOperatorGains(),
             'clients' => $this->repository->getClientSituation(),
+            'commissions' => $this->repository->getCommissionsInterOperators(),
+            'montants_a_envoyer' => $this->repository->getMontantsAEnvoyer(),
         ]);
     }
 
@@ -49,6 +51,33 @@ class Operator extends BaseController
             $this->repository->updateFeeBand($bandId, $frais);
 
             return redirect()->to(site_url('operateur'))->with('success', 'Barème mis à jour.');
+        } catch (\Throwable $exception) {
+            return redirect()->back()->with('error', $exception->getMessage());
+        }
+    }
+
+    public function setCommission()
+    {
+        try {
+            $operateurId = (int) $this->request->getPost('operateur_id');
+            $pourcentage = (float) $this->request->getPost('pourcentage');
+
+            $this->repository->setCommissionInterOperateur($operateurId, $pourcentage);
+
+            return redirect()->to(site_url('operateur'))->with('success', 'Commission mise à jour.');
+        } catch (\Throwable $exception) {
+            return redirect()->back()->with('error', $exception->getMessage());
+        }
+    }
+
+    public function deleteCommission()
+    {
+        try {
+            $operateurId = (int) $this->request->getPost('operateur_id');
+
+            $this->repository->deleteCommissionInterOperateur($operateurId);
+
+            return redirect()->to(site_url('operateur'))->with('success', 'Commission supprimée.');
         } catch (\Throwable $exception) {
             return redirect()->back()->with('error', $exception->getMessage());
         }

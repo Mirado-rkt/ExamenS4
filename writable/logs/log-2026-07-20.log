@@ -112,3 +112,59 @@ Stack trace:
 #13 /home/mirado/Bureau/ExamenS4/system/Boot.php(166): CodeIgniter\Boot::runCommand()
 #14 /home/mirado/Bureau/ExamenS4/spark(87): CodeIgniter\Boot::bootSpark()
 #15 {main}
+CRITICAL - 2026-07-20 12:24:26 --> ErrorException: SQLite3::prepare(): Unable to prepare statement: no such column: est_principal
+[Method: GET, Route: operateur]
+in APPPATH/Libraries/MobileMoneyRepository.php on line 624.
+ 1 [internal function]: CodeIgniter\Debug\Exceptions->errorHandler()
+ 2 APPPATH/Libraries/MobileMoneyRepository.php(624): SQLite3->prepare()
+ 3 APPPATH/Libraries/MobileMoneyRepository.php(401): App\Libraries\MobileMoneyRepository->fetchAll()
+ 4 APPPATH/Controllers/Operator.php(20): App\Libraries\MobileMoneyRepository->getOperators()
+ 5 SYSTEMPATH/CodeIgniter.php(951): App\Controllers\Operator->index()
+ 6 SYSTEMPATH/CodeIgniter.php(497): CodeIgniter\CodeIgniter->runController()
+ 7 SYSTEMPATH/CodeIgniter.php(340): CodeIgniter\CodeIgniter->handleRequest()
+ 8 SYSTEMPATH/Boot.php(417): CodeIgniter\CodeIgniter->run()
+ 9 SYSTEMPATH/Boot.php(68): CodeIgniter\Boot::runCodeIgniter()
+10 FCPATH/index.php(59): CodeIgniter\Boot::bootWeb()
+11 SYSTEMPATH/rewrite.php(44): require_once('/home/niaina/Bureau/s4/exam/v1/ExamenS4/public/index.php')
+CRITICAL - 2026-07-20 12:24:39 --> ErrorException: SQLite3::prepare(): Unable to prepare statement: no such column: est_principal
+[Method: GET, Route: operateur]
+in APPPATH/Libraries/MobileMoneyRepository.php on line 624.
+ 1 [internal function]: CodeIgniter\Debug\Exceptions->errorHandler()
+ 2 APPPATH/Libraries/MobileMoneyRepository.php(624): SQLite3->prepare()
+ 3 APPPATH/Libraries/MobileMoneyRepository.php(401): App\Libraries\MobileMoneyRepository->fetchAll()
+ 4 APPPATH/Controllers/Operator.php(20): App\Libraries\MobileMoneyRepository->getOperators()
+ 5 SYSTEMPATH/CodeIgniter.php(951): App\Controllers\Operator->index()
+ 6 SYSTEMPATH/CodeIgniter.php(497): CodeIgniter\CodeIgniter->runController()
+ 7 SYSTEMPATH/CodeIgniter.php(340): CodeIgniter\CodeIgniter->handleRequest()
+ 8 SYSTEMPATH/Boot.php(417): CodeIgniter\CodeIgniter->run()
+ 9 SYSTEMPATH/Boot.php(68): CodeIgniter\Boot::runCodeIgniter()
+10 FCPATH/index.php(59): CodeIgniter\Boot::bootWeb()
+11 SYSTEMPATH/rewrite.php(44): require_once('/home/niaina/Bureau/s4/exam/v1/ExamenS4/public/index.php')
+CRITICAL - 2026-07-20 12:29:10 --> ErrorException: SQLite3::prepare(): Unable to prepare statement: no such column: est_principal
+[Method: GET, Route: operateur]
+in APPPATH/Libraries/MobileMoneyRepository.php on line 624.
+ 1 [internal function]: CodeIgniter\Debug\Exceptions->errorHandler()
+ 2 APPPATH/Libraries/MobileMoneyRepository.php(624): SQLite3->prepare()
+ 3 APPPATH/Libraries/MobileMoneyRepository.php(401): App\Libraries\MobileMoneyRepository->fetchAll()
+ 4 APPPATH/Controllers/Operator.php(20): App\Libraries\MobileMoneyRepository->getOperators()
+ 5 SYSTEMPATH/CodeIgniter.php(951): App\Controllers\Operator->index()
+ 6 SYSTEMPATH/CodeIgniter.php(497): CodeIgniter\CodeIgniter->runController()
+ 7 SYSTEMPATH/CodeIgniter.php(340): CodeIgniter\CodeIgniter->handleRequest()
+ 8 SYSTEMPATH/Boot.php(417): CodeIgniter\CodeIgniter->run()
+ 9 SYSTEMPATH/Boot.php(68): CodeIgniter\Boot::runCodeIgniter()
+10 FCPATH/index.php(59): CodeIgniter\Boot::bootWeb()
+11 SYSTEMPATH/rewrite.php(44): require_once('/home/niaina/Bureau/s4/exam/v1/ExamenS4/public/index.php')
+CRITICAL - 2026-07-20 12:29:15 --> ErrorException: SQLite3::prepare(): Unable to prepare statement: no such column: est_principal
+[Method: GET, Route: operateur]
+in APPPATH/Libraries/MobileMoneyRepository.php on line 624.
+ 1 [internal function]: CodeIgniter\Debug\Exceptions->errorHandler()
+ 2 APPPATH/Libraries/MobileMoneyRepository.php(624): SQLite3->prepare()
+ 3 APPPATH/Libraries/MobileMoneyRepository.php(401): App\Libraries\MobileMoneyRepository->fetchAll()
+ 4 APPPATH/Controllers/Operator.php(20): App\Libraries\MobileMoneyRepository->getOperators()
+ 5 SYSTEMPATH/CodeIgniter.php(951): App\Controllers\Operator->index()
+ 6 SYSTEMPATH/CodeIgniter.php(497): CodeIgniter\CodeIgniter->runController()
+ 7 SYSTEMPATH/CodeIgniter.php(340): CodeIgniter\CodeIgniter->handleRequest()
+ 8 SYSTEMPATH/Boot.php(417): CodeIgniter\CodeIgniter->run()
+ 9 SYSTEMPATH/Boot.php(68): CodeIgniter\Boot::runCodeIgniter()
+10 FCPATH/index.php(59): CodeIgniter\Boot::bootWeb()
+11 SYSTEMPATH/rewrite.php(44): require_once('/home/niaina/Bureau/s4/exam/v1/ExamenS4/public/index.php')

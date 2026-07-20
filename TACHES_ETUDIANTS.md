@@ -95,3 +95,33 @@
 ---
 
 
+## VERSION 2
+
+### Objectifs V2
+- [ ] Distinguer opérateur principal vs autres opérateurs (`operateurs.est_principal`)
+- [ ] Ajouter table `commissions_inter_operateurs` et vues `vue_commissions_inter_operateurs`, `vue_montants_a_envoyer`
+- [ ] Interface opérateur: config des commissions inter-opérateurs, affichage montants à envoyer
+- [ ] Interface client: option "Inclure les frais de retrait" et transfert multiple
+- [ ] Adapter `MobileMoneyRepository` pour appliquer commission inter-opérateur, gérer option frais inclus, et `transferMultiple`
+
+### Répartition du travail
+
+- **Mirado (ETU3924)**
+	- [ ] Mettre à jour `base.sql` : ajouter `est_principal`, créer `commissions_inter_operateurs`, ajouter vues V2
+	- [ ] Modifier `app/Libraries/MobileMoneyRepository.php` : logique commission, `transferMultiple`, option frais inclus
+	- [ ] Tests manuels: transfert vers autre opérateur, frais inclus, transfert multiple
+
+- **Jerinieina (ETU4357)**
+	- [ ] Mettre à jour `app/Controllers/Operator.php` et `app/Views/operator.php` : UI commissions, affichage montants à envoyer
+	- [ ] Mettre à jour `app/Controllers/Dashboard.php` et `app/Views/dashboard.php` : checkbox frais inclus, formulaire transfert multiple
+	- [ ] Ajouter routes et valider intégration front/back
+
+### Critères de validation V2
+- [ ] Les opérations financières restent dans des transactions (BEGIN/COMMIT/ROLLBACK)
+- [ ] Commission inter-opérateur appliquée (conforme à la règle métier choisie)
+- [ ] Option "Inclure les frais de retrait" fonctionne uniquement pour destinataires chez l'opérateur principal
+- [ ] Transfert multiple autorisé uniquement si tous les destinataires sont chez l'opérateur principal
+- [ ] Ne pas casser les fonctionnalités V1 existantes
+
+
+
