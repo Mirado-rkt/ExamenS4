@@ -222,3 +222,12 @@ LEFT JOIN commissions_inter_operateurs ci ON ci.operateur_id = op.id
 WHERE op_src.est_principal = 1 AND op.est_principal = 0
 GROUP BY op.code;
 
+CREATE TABLE promotions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type_operation_id INTEGER NOT NULL UNIQUE,
+    pourcenttage_reduction DECIMAL(5,2) NOT NULL DEFAULT 0,
+    actif INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (type_operation_id) REFERENCES type_operation(id)
+);
+
+INSERT INTO promotion (type_operation_id, pourcentage_reduction,actif) SELECT id, 50.00, 1 FROM type_operation;

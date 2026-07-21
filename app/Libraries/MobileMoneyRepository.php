@@ -23,6 +23,27 @@ class MobileMoneyRepository
         $this->db->busyTimeout(5000);
         $this->db->exec('PRAGMA foreign_keys = ON;');
 
+        if (!$this->tableExists('promotions')) {
+            $this->db->exec('BEGIN IMEDIATE TRANSACTION');
+            try {
+                $this->exec(
+                    'CREATE TABLE promotions (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            type_operation_id INTEGER NOT NULL UNIQUE,
+                            pourcenttage_reduction DECIMAL(5,2) NOT NULL DEFAULT 0,
+                            actif INTEGER NOT NULL DEFAULT 1,
+                            FOREIGN KEY (type_operation_id) REFERENCES type_operation(id)
+                        )'
+                );
+
+                $types = $this ->fetchAll('SELECT FROM types_operation');
+                foreach ($types as $type){
+                    $this->execute(
+                        'INSERT OR IGNORE INTO promotions (type_operation_id)'
+                    )
+                }
+        }
+
         $this->initializeSchema();
     }
 
@@ -827,4 +848,5 @@ class MobileMoneyRepository
             $statement->bindValue(':' . $key, $value, $type);
         }
     }
+
 }

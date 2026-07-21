@@ -9,7 +9,18 @@
 ?>
 <?= $this->extend('layout') ?>
 
+<?= $this->section('sidebar') ?>
+<nav id="mmSidebarNav" class="nav flex-column gap-1">
+    <div class="mm-pill mb-3">Navigation</div>
+    <a class="nav-link" href="#configuration">Configuration et suivi des activités</a>
+    <a class="nav-link" href="#gains">Gains & Commissions</a>
+    <a class="nav-link" href="#clients">Situation des comptes clients</a>
+    <a class="nav-link" href="#prefixes">Préfixes autorisés</a>
+</nav>
+<?= $this->endSection() ?>
+
 <?= $this->section('content') ?>
+<section id="configuration">
 <div class="mb-4">
     <div class="mm-pill mb-3">Espace opérateur</div>
     <h1 class="h2 mb-2">Configuration et suivi des activités</h1>
@@ -110,9 +121,10 @@
         </div>
     </div>
 </div>
+</section>
 
 <div class="row g-4 mb-4">
-    <div class="col-lg-5">
+    <div class="col-lg-5" id="gains">
         <div class="card surface border-0 text-white h-100">
             <div class="card-body p-4">
                 <h2 class="h4 mb-3">Situation des gains</h2>
@@ -141,7 +153,7 @@
             </div>
         </div>
     </div>
-        <div class="col-lg-7">
+        <div class="col-lg-7" id="commissions">
             <div class="card surface border-0 text-white h-100">
                 <div class="card-body p-4">
                     <h2 class="h4 mb-3">Commissions inter-opérateurs</h2>
@@ -199,6 +211,7 @@
                         </div>
                     </form>
                     <hr class="my-4">
+                    <div id="montants"></div>
                     <h3 class="h6 mb-2">Montants à envoyer par opérateur</h3>
                     <div class="table-responsive">
                         <table class="table table-dark mb-0">
@@ -225,7 +238,7 @@
                 </div>
             </div>
         </div>
-    <div class="col-lg-7">
+    <div class="col-lg-7" id="clients">
         <div class="card surface border-0 text-white h-100">
             <div class="card-body p-4">
                 <h2 class="h4 mb-3">Situation des comptes clients</h2>
@@ -256,7 +269,7 @@
     </div>
 </div>
 
-<div class="row g-4">
+<div class="row g-4" id="prefixes">
     <div class="col-12">
         <div class="card surface border-0 text-white">
             <div class="card-body p-4">
