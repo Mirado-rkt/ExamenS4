@@ -116,10 +116,85 @@
             from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: translateY(0); }
         }
+
+        /* --- Navbar fixe --- */
+        .navbar.mm-fixed-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1030;
+        }
+
+        body.has-fixed-nav {
+            padding-top: 78px;
+        }
+
+        [id] {
+            scroll-margin-top: 96px;
+        }
+
+        /* --- Layout à deux colonnes (sidebar + contenu) --- */
+        .mm-layout-grid {
+            display: flex;
+            align-items: flex-start;
+            gap: 2rem;
+        }
+
+        .mm-sidebar {
+            flex: 0 0 250px;
+            position: sticky;
+            top: 96px;
+            max-height: calc(100vh - 116px);
+            overflow-y: auto;
+        }
+
+        .mm-sidebar .nav-link {
+            color: var(--mm-muted);
+            border-radius: 10px;
+            padding: .55rem .8rem;
+            font-size: .88rem;
+            font-weight: 600;
+            border: 1px solid transparent;
+        }
+
+        .mm-sidebar .nav-link:hover {
+            color: var(--mm-text);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .mm-sidebar .nav-link.active {
+            color: #041018;
+            background: var(--mm-accent);
+            border-color: var(--mm-accent);
+        }
+
+        .mm-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        @media (max-width: 991.98px) {
+            .mm-layout-grid {
+                flex-direction: column;
+            }
+
+            .mm-sidebar {
+                position: static;
+                width: 100%;
+                max-height: none;
+                overflow: visible;
+            }
+
+            .mm-sidebar .nav {
+                flex-direction: row !important;
+                flex-wrap: wrap;
+            }
+        }
     </style>
 </head>
-<body>
-<nav class="navbar navbar-expand-lg navbar-dark border-bottom" style="background: rgba(7,17,31,0.72); border-color: rgba(255,255,255,0.08) !important;">
+<body class="has-fixed-nav" data-bs-spy="scroll" data-bs-target="#mmSidebarNav" data-bs-offset="120" data-bs-smooth-scroll="true" tabindex="0">
+<nav class="navbar navbar-expand-lg navbar-dark border-bottom mm-fixed-nav" style="background: rgba(7,17,31,0.92); border-color: rgba(255,255,255,0.08) !important;">
     <div class="container py-2">
         <a class="navbar-brand d-flex align-items-center gap-3" href="<?= site_url('/') ?>">
             <span class="brand-mark">MM</span>
@@ -137,16 +212,37 @@
     </div>
 </nav>
 
+<?php $sidebarContent = trim($this->renderSection('sidebar')); ?>
+
 <main class="container py-4 py-lg-5 page-fade">
-    <?php if ($message = session()->getFlashdata('success')) : ?>
-        <div class="alert alert-success surface text-white border-0 mb-4"><?= esc($message) ?></div>
-    <?php endif; ?>
+    <?php if ($sidebarContent !== '') : ?>
+        <div class="mm-layout-grid">
+            <aside class="mm-sidebar">
+                <?= $sidebarContent ?>
+            </aside>
+            <div class="mm-content">
+                <?php if ($message = session()->getFlashdata('success')) : ?>
+                    <div class="alert alert-success surface text-white border-0 mb-4"><?= esc($message) ?></div>
+                <?php endif; ?>
 
-    <?php if ($message = session()->getFlashdata('error')) : ?>
-        <div class="alert alert-danger surface text-white border-0 mb-4"><?= esc($message) ?></div>
-    <?php endif; ?>
+                <?php if ($message = session()->getFlashdata('error')) : ?>
+                    <div class="alert alert-danger surface text-white border-0 mb-4"><?= esc($message) ?></div>
+                <?php endif; ?>
 
-    <?= $this->renderSection('content') ?>
+                <?= $this->renderSection('content') ?>
+            </div>
+        </div>
+    <?php else : ?>
+        <?php if ($message = session()->getFlashdata('success')) : ?>
+            <div class="alert alert-success surface text-white border-0 mb-4"><?= esc($message) ?></div>
+        <?php endif; ?>
+
+        <?php if ($message = session()->getFlashdata('error')) : ?>
+            <div class="alert alert-danger surface text-white border-0 mb-4"><?= esc($message) ?></div>
+        <?php endif; ?>
+
+        <?= $this->renderSection('content') ?>
+    <?php endif; ?>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
