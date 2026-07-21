@@ -55,8 +55,11 @@ CREATE TABLE clients (
     operateur_id   INTEGER NOT NULL,
     telephone      VARCHAR(15) NOT NULL UNIQUE,
     solde          DECIMAL(15,2) NOT NULL DEFAULT 0,
+    epargne DECIMAL(15,2) NOT NULL,
+    pourcentage_epargne DECIMAL(5,2) NOT NULL,
     date_creation  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (operateur_id) REFERENCES operateurs(id)
+
 );
 
 -- Historique des opérations (dépôt, retrait, transfert)
@@ -69,6 +72,7 @@ CREATE TABLE operations (
     client_destinataire_id   INTEGER,            -- utilisé uniquement pour un transfert
     montant                  DECIMAL(15,2) NOT NULL,
     frais                    DECIMAL(15,2) NOT NULL DEFAULT 0,
+    montant_epargne DECIMAL(15,2) NOT NULL DEFAULT 0,
     solde_avant              DECIMAL(15,2) NOT NULL,
     solde_apres              DECIMAL(15,2) NOT NULL,
     date_operation           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -231,3 +235,8 @@ CREATE TABLE promotions (
 );
 
 INSERT INTO promotion (type_operation_id, pourcentage_reduction,actif) SELECT id, 50.00, 1 FROM type_operation;
+
+CREATE TABLE epargne (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pourcentage_epargne DECIMAL
+)

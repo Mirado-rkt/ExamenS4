@@ -5,6 +5,7 @@ namespace App\Libraries;
 use RuntimeException;
 use SQLite3;
 use SQLite3Result;
+use Throwable;
 
 class MobileMoneyRepository
 {
@@ -43,6 +44,35 @@ class MobileMoneyRepository
                     )
                 }
         }
+    }
+
+    $clientsCols = $this->fetchAll<("PRAGMA table_info('clients')");
+    $hasEpargne = false;
+    $hasPourcentageEpagrne = false ;
+    foreach ($clientsCols as $col){
+        if (issset($col['name']) && $col['name']==='epargne'){
+            $hasEpargne=true;
+        }
+    }
+
+    if (!$hasEpargne || !$hasPourcentageEpagrne){
+        $this->db->exec('BEGIN IMMEDIATE TRANSACTION');
+        try{
+            if(!$hasEpargne && !$this->db->exec('ALTER TABLE clients ADD COLUMN epargne DECIMAL(15,2) NOT NULL DEFAULT 0')){
+                throw new RuntimeException('impossible d ajouter epargne');
+            }
+            if(!$hasPourcentageEpagrne && !this->db->exec('ALTER TABLE clients ADD COLUMN pourcentage_epargne DECIMAL(5,2) NOT NULL DEFAULT 0')){
+                throw new RuntimeException('impossible d ajouter pourcentage');
+            }
+            $this->db->exec('COMMIT');
+        } catch (/Throwable $e){
+            $this->db->exec('ROLLBACK');
+            throw $e;
+        }
+    }
+
+    $opCols = $this->fetchAll("PRAGMA table_info")
+
 
         $this->initializeSchema();
     }
